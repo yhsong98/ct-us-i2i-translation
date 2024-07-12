@@ -7,3 +7,5 @@
 
 This is the project for unpaired i2i translation between CT and ultrasound images, following the structure of [pytorch-CycleGAN-and-pix2pix](https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix).
 
+<img src='docs/imgs/soon.png'>
+
