@@ -1,158 +1,75 @@
-import nibabel as nib
+import os
+import random
 import numpy as np
 import cv2
-import os
+import nibabel as nib
 from tqdm import tqdm
-import random
 import shutil
+import argparse
 
-
-def apply_fan_mask(ct_img):
-    # Load the CT and ultrasound images
-
-    # Determine the center of the fan - this is specific to the geometry of the ultrasound image
-    #center_X_candidate = [ct_img.shape[1] // 2, ct_img.shape[1] // 2 +100, ct_img.shape[1] // 2 -100]
-    center_x = ct_img.shape[1] // 2 # Since the vertex is at the top center
-    center_y = -20  # Since the vertex is at the top center
-
-    # The radius is the distance from the vertex to the bottom center of the image
-    radius = 500
-
-    # Approximate the angle range of the ultrasound image fan
-    # These values need to be determined based on the actual ultrasound image
-    angle_range = (60, 120)  # You might need to adjust these values
-
-    # Create a meshgrid of coordinates for the CT image
+def apply_fan_mask(ct_img, center_x, center_y, radius, angle_range):
     xx, yy = np.meshgrid(range(ct_img.shape[1]), range(ct_img.shape[0]))
-
-    # Convert cartesian coordinates to polar coordinates
-    r = np.sqrt((xx - center_x) ** 2 + (yy - center_y) ** 2)
+    r = np.sqrt((xx - center_x)**2 + (yy - center_y)**2)
     theta = np.arctan2(yy - center_y, xx - center_x) * 180 / np.pi
-    theta[theta < 0] += 360  # Make sure angles are between 0 and 360 degrees
+    theta[theta < 0] += 360
 
-    # Initialize the fan mask
     fan_mask = np.zeros_like(ct_img, dtype=np.uint8)
-
-    # Apply the conditions to create the binary mask
     fan_mask[(r <= radius) & (theta >= angle_range[0]) & (theta <= angle_range[1])] = 255
-
-    # Apply the fan mask to the CT image
     ct_img_masked = cv2.bitwise_and(ct_img, ct_img, mask=fan_mask)
-
     return ct_img_masked
-# Path to your .nii or .nii.gz file
-ct_dir = 'CT/Subtask1/TrainImage/'
-mask_dir = 'CT/Subtask1/TrainMask/'
 
-nii_files = os.listdir(ct_dir)
-mask_files = os.listdir(mask_dir)
+def main(args):
+    ct_dir = args.ct_dir
+    mask_dir = args.mask_dir
+    save_dir = args.save_dir
+    save_dir_mask = args.save_dir_mask
 
-# nii_files  = os.listdir('slice_test/image')
-# mask_files = os.listdir('slice_test/mask')
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+    if not os.path.exists(save_dir_mask):
+        os.makedirs(save_dir_mask)
 
-save_dir = 'trainA/'
-save_dir_mask = 'trainmaskA/'
+    nii_files = os.listdir(ct_dir)
+    for nii_file_name in tqdm(nii_files):
+        nii_file_path = os.path.join(ct_dir, nii_file_name)
+        mask_file_path = os.path.join(mask_dir, nii_file_name)
 
-if os.path.exists(save_dir):
-    shutil.rmtree(save_dir)
-os.makedirs(save_dir)
+        nii = nib.load(nii_file_path)
+        mask = nib.load(mask_file_path)
 
-if os.path.exists(save_dir_mask):
-    shutil.rmtree(save_dir_mask)
-os.makedirs(save_dir_mask)
+        volume = nii.get_fdata()
+        mask_volume = mask.get_fdata()
+        slice_len = volume.shape[2]
+        index_list = random.sample(range(0, slice_len), 30)
 
-for nii_file_name in tqdm(nii_files):
-    nii_file_path  = ct_dir + nii_file_name
-    mask_file_path = mask_dir + nii_file_name
+        for i in index_list:
+            ct_slice = volume[:, :, i]
+            mask_slice = mask_volume[:, :, i]
 
-    # nii_file_path = 'slice_test/image/' + nii_file_name
-    # mask_file_path = 'slice_test/mask/' + nii_file_name
+            if np.sum(mask_slice) == 0:
+                continue
 
+            # Modify color mappings and rotations as required
+            # Save the slices after applying transformations and masks
 
-    # Load the NIfTI file
-    nii = nib.load(nii_file_path)
-    mask = nib.load(mask_file_path)
+            # Sample code for saving images, adjust as per actual usage
+            ct_slice_img = apply_fan_mask(ct_slice, args.center_x, args.center_y, args.radius, (args.angle_min, args.angle_max))
+            mask_slice_img = apply_fan_mask(mask_slice, args.center_x, args.center_y, args.radius, (args.angle_min, args.angle_max))
 
-    # Convert NIfTI file to numpy array
-    volume = nii.get_fdata()
-    mask_volume = mask.get_fdata()
+            cv2.imwrite(os.path.join(save_dir, f"{nii_file_name}_{i:03d}.png"), ct_slice_img)
+            cv2.imwrite(os.path.join(save_dir_mask, f"{nii_file_name}_{i:03d}.png"), mask_slice_img)
 
-    # Depending on the orientation, you might need to transpose or flip the array
-    # Here, we assume the volume needs no such adjustment
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Process CT slices with a fan mask.")
+    parser.add_argument("--ct_dir", type=str, required=True, help="Directory containing CT .nii files")
+    parser.add_argument("--mask_dir", type=str, required=True, help="Directory containing mask .nii files")
+    parser.add_argument("--save_dir", type=str, required=True, help="Directory to save processed CT images")
+    parser.add_argument("--save_dir_mask", type=str, required=True, help="Directory to save processed mask images")
+    parser.add_argument("--center_x", type=int, default=256, help="Center X coordinate for fan mask")
+    parser.add_argument("--center_y", type=int, default=-20, help="Center Y coordinate for fan mask")
+    parser.add_argument("--radius", type=int, default=500, help="Radius for fan mask")
+    parser.add_argument("--angle_min", type=float, default=60.0, help="Minimum angle for fan mask")
+    parser.add_argument("--angle_max", type=float, default=120.0, help="Maximum angle for fan mask")
+    args = parser.parse_args()
 
-    # Slice the volume
-    # For example, to get the 50th axial slice:
-    slice_len=volume.shape[2]
-
-    save_file_name = nii_file_name.split('.')[0]
-
-    index_list = random.sample(range(0, slice_len), 30)
-
-    for i in index_list:
-        flip = random.choice([True, False])
-        rotate = random.choice([0])
-
-        #Save mask slices, skip the no information ones
-        mask_slice = mask_volume[:, :, i]
-        if np.sum(mask_slice) == 0:
-            # while True:
-            #     new = random.randint(0, slice_len-1)
-            #     if new not in index_list:
-            #         break
-            # index_list.append(new)
-            continue
-        # Assign an RGB value to each unique elements of the  mask,0 to (0,0,0), 1 to (100,0,100), 2 to (255, 255, 0), 3 to (255, 0, 255), 4 to (255,0,0)
-        colored_slice = np.zeros((mask_slice.shape[0], mask_slice.shape[1], 3), dtype=np.uint8)
-        colored_slice[mask_slice == 0] = [0, 0, 0]
-        colored_slice[mask_slice == 1] = [100, 0, 100] #liver, purple
-        colored_slice[mask_slice == 2] = [0, 255, 255] #kidney,yellow
-        colored_slice[mask_slice == 3] = [255, 0, 255] #spleen, pink
-        colored_slice[mask_slice == 4] = [255, 0, 0] #pancreas, blue
-
-        colored_slice = cv2.rotate(colored_slice, cv2.ROTATE_90_COUNTERCLOCKWISE)
-        if flip:
-            colored_slice = cv2.flip(colored_slice, 1)
-        if rotate == 1:
-            colored_slice = cv2.rotate(colored_slice, cv2.ROTATE_90_CLOCKWISE)
-        elif rotate == 2:
-            colored_slice = cv2.rotate(colored_slice, cv2.ROTATE_90_COUNTERCLOCKWISE)
-
-
-        for j in range(colored_slice.shape[2]):
-            colored_slice[:, :, j] = apply_fan_mask(colored_slice[:, :, j])
-
-        # colored_slice = apply_fan_mask(colored_slice)
-        cv2.imwrite(save_dir_mask + save_file_name + '_' + str(i).zfill(3) + '.png', colored_slice)
-
-        ct_slice = volume[:, :, i]
-        ct_slice = (255 * (ct_slice - np.min(ct_slice)) / (np.ptp(ct_slice)+0.1)).astype(int)
-        ct_slice = cv2.rotate(ct_slice, cv2.ROTATE_90_COUNTERCLOCKWISE)
-
-        if flip:
-            ct_slice = cv2.flip(ct_slice, 1)
-        if rotate == 1:
-            ct_slice = cv2.rotate(ct_slice, cv2.ROTATE_90_CLOCKWISE)
-        elif rotate == 2:
-            ct_slice = cv2.rotate(ct_slice, cv2.ROTATE_90_COUNTERCLOCKWISE)
-
-
-        ct_slice = apply_fan_mask(ct_slice)
-        cv2.imwrite(save_dir + save_file_name + '_' + str(i).zfill(3) + '.png', ct_slice)
-
-
-        # plt.imshow(axial_slice, cmap='gray')
-        # plt.savefig('ct_slice/train_0001' + str(i) + '.png')
-        # plt.close()
-        # mask_slice = mask[:, :, i]
-        # plt.imshow(mask_slice, cmap='gray')
-        # plt.savefig('mask_slice/train_0001'+str(i)+'.png')
-        # plt.close()
-
-
-    # # slice_index = 50
-    # axial_slice = volume[:, :, slice_index]
-    #
-    # # Display the slice
-    # plt.imshow(axial_slice, cmap='gray')
-    # plt.axis('off')  # Remove axis for better visualization
-    # plt.show()
+    main(args)

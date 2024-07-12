@@ -65,7 +65,7 @@ class CycleGANModel(BaseModel):
         # specify the models you want to save to the disk. The training/test scripts will call <BaseModel.save_networks> and <BaseModel.load_networks>.
         if self.isTrain:
             self.model_names = ['G_A', 'G_B', 'D_A', 'D_B' , 'M_A', 'M_B']
-        else:  # during test time, only load Gs
+        else:  # during test time, not loading Ds
             self.model_names = ['G_A', 'G_B', 'M_A', 'M_B']
 
         self.n_class = opt.n_class
