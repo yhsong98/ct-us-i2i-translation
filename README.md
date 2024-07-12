@@ -1,7 +1,3 @@
-
-
-<br><br><br>
-
 # Semantically Ct-Ultrasound image-to-image translation
 <img src='docs/imgs/real_A.png' width=384> <img src='docs/imgs/fake_B.png' width=384>
 
