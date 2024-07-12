@@ -14,5 +14,10 @@ This is the project for unpaired i2i translation between CT and ultrasound image
 ### Abdominal Ultrasound dataset
 (https://www.kaggle.com/datasets/ignaciorlando/ussimandsegm)
 
+## Train
+```bash
+python train.py --dataroot ./datasets/ctus --name ctus_cyclegan --model cycle_gan
+```
+
 <img src='docs/imgs/soon.png'>
 
