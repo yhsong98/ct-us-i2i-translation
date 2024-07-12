@@ -3,7 +3,6 @@ import itertools
 from util.image_pool import ImagePool
 from .base_model import BaseModel
 from . import networks
-import numpy as np
 import torch.nn.functional as F
 from .custom_loss import dice_loss
 
@@ -71,13 +70,7 @@ class CycleGANModel(BaseModel):
 
         self.n_class = opt.n_class
 
-        # define networks (both Generators and discriminators)
-        # The naming is different from those used in the paper.
-        # Code (vs. paper): G_A (G), G_B (F), D_A (D_Y), D_B (D_X)
-        # self.netG_A = networks.define_G(opt.input_nc+1, opt.output_nc, opt.ngf, opt.netG, opt.norm,
-        #                                 not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
-        # self.netG_B = networks.define_G(opt.output_nc+1, opt.input_nc, opt.ngf, opt.netG, opt.norm,
-        #                                 not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
+
 
         self.netG_A = networks.define_U_G(opt.input_nc+1, opt.output_nc, opt.ngf, opt.netG, opt.norm,
                                         not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
@@ -85,10 +78,6 @@ class CycleGANModel(BaseModel):
                                         not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
 
         # mask generator
-        # self.netM_A = networks.define_G(opt.input_nc, 6, opt.ngf, 'unet_256', opt.norm,
-        #                                 not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
-        # self.netM_B = networks.define_G(opt.output_nc, 6, opt.ngf, 'unet_256', opt.norm,
-        #                                 not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
         self.netM_A = networks.define_U_G(opt.input_nc, opt.n_class, opt.ngf, opt.netG, opt.norm,
                                         not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
         self.netM_B = networks.define_U_G(opt.output_nc, opt.n_class, opt.ngf, opt.netG, opt.norm,
@@ -146,7 +135,7 @@ class CycleGANModel(BaseModel):
     def forward(self):
         """Run forward pass; called by both functions <optimize_parameters> and <test>."""
 
-
+        # A to B
         self.fake_B = self.netG_A(torch.concat((self.real_A, self.real_A_M_index), dim=1))  # G_A(A)
         self.pre_fake_B_M = self.netM_B(self.fake_B)
         self.rec_A = self.netG_B(torch.concat((self.fake_B,torch.argmax(F.softmax(self.pre_fake_B_M,dim=1),dim=1).unsqueeze(1)), dim=1))  # G_B(G_A(A))
@@ -154,42 +143,12 @@ class CycleGANModel(BaseModel):
         self.pre_rec_A_M = self.netM_A(self.rec_A)
 
 
-        # self.rec_A_M = F.softmax(self.rec_A_M, dim=1)
-        # self.rec_A_M = torch.argmax(self.rec_A_M, dim=1)
-
-
+        # B to A
         self.fake_A = self.netG_B(torch.concat((self.real_B, self.real_B_M_index), dim=1))  # G_B(B)
         self.pre_fake_A_M = self.netM_A(self.fake_A)
-
         self.rec_B = self.netG_A(torch.concat((self.fake_A, torch.argmax(F.softmax(self.pre_fake_A_M,dim=1),dim=1).unsqueeze(1)), dim=1)) # G_A(G_B(B))
         self.pre_B_M = self.netM_B(self.real_B)
         self.pre_rec_B_M = self.netM_B(self.rec_B)
-
-
-        # For Visualization
-        # self.rgb_pre_A_M = indices_to_rgb(torch.argmax(F.softmax(self.pre_A_M, dim=1), dim=1))
-        # self.rgb_pre_B_M = indices_to_rgb(torch.argmax(F.softmax(self.pre_B_M, dim=1), dim=1))
-        #
-        # self.rgb_rec_A_M = indices_to_rgb(torch.argmax(F.softmax(self.rec_A_M, dim=1), dim=1))
-        # self.rgb_rec_B_M = indices_to_rgb(torch.argmax(F.softmax(self.rec_B_M, dim=1), dim=1))
-        #
-        # self.rgb_fake_A_M = indices_to_rgb(torch.argmax(F.softmax(self.fake_A_M, dim=1), dim=1))
-        # self.rgb_fake_B_M = indices_to_rgb(torch.argmax(F.softmax(self.fake_B_M, dim=1), dim=1))
-        #
-        # self.rgb_pre_fake_A_M = indices_to_rgb(torch.argmax(F.softmax(self.pre_fake_A_M, dim=1), dim=1))
-        # self.rgb_pre_fake_B_M = indices_to_rgb(torch.argmax(F.softmax(self.pre_fake_B_M, dim=1), dim=1))
-        #
-        #
-        # self.rgb_real_A_M = indices_to_rgb(torch.argmax(self.real_A_M, dim=1))
-        # self.rgb_real_B_M = indices_to_rgb(torch.argmax(self.real_B_M, dim=1))
-
-        # self.real_A_M = torch.argmax(self.real_A_M, dim=1)
-        # self.real_B_M = torch.argmax(self.real_B_M, dim=1)
-        #
-        # self.pre_fake_A_M = torch.argmax(F.softmax(self.pre_fake_A_M,dim=1), dim=1)
-        # self.pre_fake_B_M = torch.argmax(F.softmax(self.pre_fake_B_M,dim=1), dim=1)
-
-
 
 
 
@@ -277,9 +236,6 @@ class CycleGANModel(BaseModel):
                                         F.one_hot(torch.argmax(self.real_A_M, dim=1), self.n_class).permute(0, 3, 1, 2).float(), multiclass=True)
         self.loss_M_pre_fake_A_real_B += dice_loss(F.softmax(self.pre_fake_A_M, dim=1).float(),
                                         F.one_hot(torch.argmax(self.real_B_M, dim=1), self.n_class).permute(0, 3, 1, 2).float(), multiclass=True)
-
-        # self.loss_M_pre_fake_B_real_A *= 2
-        # self.loss_M_pre_fake_A_real_B *= 2
 
 
         self.loss_M_pre_rec_A_real_A = self.criterionMask(self.pre_rec_A_M, torch.argmax(self.real_A_M,dim=1))
