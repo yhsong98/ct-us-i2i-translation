@@ -1,7 +1,7 @@
 # Semantically Ct-Ultrasound image-to-image translation
 <img src='docs/imgs/real_A.png' width=384> <img src='docs/imgs/fake_B.png' width=384>
 
-This is the project for unpaired i2i translation between CT and ultrasound images, following the structure of [pytorch-CycleGAN-and-pix2pix](https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix), with multiple modifications inserted.
+This is the project for unpaired i2i translation between CT and ultrasound images, following the structure of [pytorch-CycleGAN-and-pix2pix](https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix), with multiple modifications inserted. The structure of codes are maintained as similar to the original CycleGAN repository as possible so that further extensions can be easierly implemented.
 
 ## Dataset
 ### Abdominal CT dataset
